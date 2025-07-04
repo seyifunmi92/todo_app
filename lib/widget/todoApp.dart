@@ -1,8 +1,9 @@
 // ignore_for_file: file_names, non_constant_identifier_names, library_private_types_in_public_api
 
 import 'package:flutter/material.dart';
+import 'package:todo_app/Models/model.dart';
 import 'package:todo_app/widget/items.dart';
-import 'package:todo_app/widget/model.dart';
+
 
 class ToDoApp extends StatefulWidget {
   const ToDoApp({super.key});
@@ -186,14 +187,6 @@ filterItems() {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Icon(Icons.menu, color: Color(0xFFC19F54)),
-          // SizedBox(
-          //   height: 40,
-          //   width: 40,
-          //   child: ClipRRect(
-          //     borderRadius: BorderRadius.circular(30),
-          //     child: Image.asset('assets/Vintapay V 1.png'),
-          //   ),
-          // ),
         ],
       ),
     );
