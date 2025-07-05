@@ -1,9 +1,12 @@
 // ignore_for_file: file_names, non_constant_identifier_names, library_private_types_in_public_api
 
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:todo_app/Models/model.dart';
 import 'package:todo_app/widget/items.dart';
-
 
 class ToDoApp extends StatefulWidget {
   const ToDoApp({super.key});
@@ -13,41 +16,87 @@ class ToDoApp extends StatefulWidget {
 }
 
 class _ToDoAppState extends State<ToDoApp> {
-  final brandNames = MyItems.itemsList();
+  final List<MyItems> brandNames = [];
   final textController = TextEditingController();
   final searchController = TextEditingController();
   List<MyItems> filteredItems = [];
 
-@override
+  @override
   void initState() {
     super.initState();
-    filteredItems = brandNames; // Initially, show all items
-    searchController.addListener(filterItems); // Add a listener to the search box
+    filteredItems = brandNames;
+    loadItems();
+    searchController.addListener(
+      filterItems,
+    ); // Add a listener to the search box
   }
 
- @override
+  @override
   void dispose() {
-    searchController.dispose(); 
+    searchController.dispose();
     textController.dispose();
     super.dispose();
   }
 
-filterItems() {
+  filterItems() {
     final query = searchController.text.toLowerCase(); // Get the search query
     setState(() {
-      filteredItems = brandNames.where((item) {
-        return item.itemsText!.toLowerCase().contains(query); // Filter items by text
-      }).toList();
+      filteredItems =
+          brandNames.where((item) {
+            return item.itemsText!.toLowerCase().contains(
+              query,
+            ); // Filter items by text
+          }).toList();
     });
   }
 
+  Future<void> storeItems() async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<Map<String, dynamic>> itemsList =
+        brandNames
+            .map(
+              (item) => {
+                'id': item.id,
+                'text': item.itemsText,
+                'isDone': item.isDone,
+              },
+            )
+            .toList();
+    prefs.setString('items', jsonEncode(itemsList));
+    if (kDebugMode) {
+      print('Saved to SharedPreferences: ${jsonEncode(itemsList)}');
+    }
+  }
 
+  Future<void> loadItems() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? itemsData = prefs.getString('items');
+    if (kDebugMode) {
+      print('Loaded from SharedPreferences: $itemsData');
+    } 
+    if (itemsData != null) {
+      final List<dynamic> itemsList = jsonDecode(itemsData);
+      setState(() {
+        brandNames.clear();
+        filteredItems.clear();
+        brandNames.addAll(
+          itemsList.map(
+            (item) => MyItems(
+              id: item['id'],
+              itemsText: item['itemsText'],
+              isDone: item['isDone'] ?? false,
+            ),
+          ),
+        );
+        filteredItems = List.from(brandNames);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: _BuilAppBar(),
       body: Stack(
         children: [
           Container(
@@ -59,22 +108,46 @@ filterItems() {
                   child: ListView(
                     children: [
                       Container(
-                        margin: EdgeInsets.only(top: 50, bottom: 30),
+                        margin: EdgeInsets.only(top: 30, bottom: 30),
                         child: const Text(
-                          'Items ToDos',
+                          'TODO',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 30,
+                            fontSize: 25,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
-                      for (MyItems myItems in filteredItems)
-                        ItemsToDo(
-                          myItems: myItems,
-                          onChanged: _myListItemChanged,
-                          onDelete: _myListItemDelete,
-                        ),
+                      ...(filteredItems.isEmpty
+                          ? [
+                            SizedBox(height: 80),
+                            Center(
+                              child: Icon(
+                                Icons.list_alt,
+                                color: Colors.grey.shade600,
+                                size: 100,
+                              ),
+                            ),
+                            Center(
+                              child: Text(
+                                'No items',
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ]
+                          : filteredItems
+                              .map(
+                                (myItems) => ItemsToDo(
+                                  myItems: myItems,
+                                  onChanged: _myListItemChanged,
+                                  onDelete: _myListItemDelete,
+                                ),
+                              )
+                              .toList()),
                     ],
                   ),
                 ),
@@ -136,6 +209,7 @@ filterItems() {
     setState(() {
       myItems.isDone = !myItems.isDone;
     });
+    storeItems();
   }
 
   _myListItemDelete(String id) {
@@ -143,10 +217,11 @@ filterItems() {
       brandNames.removeWhere((item) => item.id == id);
       filteredItems = brandNames; // Update filtered list
     });
+    storeItems();
   }
 
   AddNewItems() {
-   final newItemText = textController.text.trim();
+    final newItemText = textController.text.trim();
     if (newItemText.isNotEmpty) {
       setState(() {
         brandNames.add(
@@ -155,39 +230,31 @@ filterItems() {
         filteredItems = brandNames; // Update filtered list
         textController.clear();
       });
+      storeItems();
     }
   }
 
   Widget searchBox() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 15),
-      decoration: BoxDecoration(
-        color: Colors.grey[800],
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: TextFormField(
-        controller: searchController,
-        cursorColor: Colors.white30,
-        style: TextStyle(color: Colors.white),
-        decoration: InputDecoration(
-          prefixIcon: Icon(Icons.search, color: Color(0xFFC19F54), size: 20),
-          prefixIconConstraints: BoxConstraints(maxHeight: 20, minWidth: 25),
-          border: InputBorder.none,
-          hintText: 'Search',
-          hintStyle: TextStyle(color: Colors.white30),
+    return Padding(
+      padding: const EdgeInsets.only(top: 80),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 15),
+        decoration: BoxDecoration(
+          color: Colors.grey[800],
+          borderRadius: BorderRadius.circular(20),
         ),
-      ),
-    );
-  }
-
-  AppBar _BuilAppBar() {
-    return AppBar(
-      backgroundColor: Colors.black,
-      title: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Icon(Icons.menu, color: Color(0xFFC19F54)),
-        ],
+        child: TextFormField(
+          controller: searchController,
+          cursorColor: Colors.white30,
+          style: TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            prefixIcon: Icon(Icons.search, color: Color(0xFFC19F54), size: 20),
+            prefixIconConstraints: BoxConstraints(maxHeight: 20, minWidth: 25),
+            border: InputBorder.none,
+            hintText: 'Search',
+            hintStyle: TextStyle(color: Colors.white30),
+          ),
+        ),
       ),
     );
   }
